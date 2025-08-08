@@ -205,7 +205,7 @@ export default function MapDemo() {
         </div>
       )}
       {selectedFeature && (
-        <div className="fixed top-0 right-0 h-screen w-[min(50vw,600px)] bg-white shadow-[ -4px_0_24px_rgba(0,0,0,0.18)] z-[1000] flex flex-col p-10 pt-10 pb-8 text-[#222] font-sans overflow-y-auto">
+        <div className="fixed top-0 right-0 h-screen w-[min(50vw,600px)] bg-white shadow-[ -4px_0_24px_rgba(0,0,0,0.18)] z-[1000] flex flex-col p-10 py-8 text-[#222] font-sans overflow-y-auto">
           <button
             className="self-end mb-6 text-3xl bg-none border-none cursor-pointer text-gray-400 hover:text-gray-600"
             onClick={() => setSelectedFeature(null)}
@@ -272,18 +272,18 @@ export default function MapDemo() {
                 const variance = selectedFeature.properties.Variance_pred_scaled;
                 const similarity = selectedFeature.properties.ncdd_embeddings;
                 let tags = [];
-                const tooMuchVariance = variance > 0.1;
-                const notEnoughSimilar = similarity > -5.25;
-                if (tooMuchVariance && notEnoughSimilar) {
-                  tags.push({ label: 'Very unreliable', color: '#e53935' });
-                } else {
-                  if (tooMuchVariance) tags.push({ label: 'Too much variance', color: '#fbc02d' });
-                  if (notEnoughSimilar) tags.push({ label: 'Not enough similar data', color: '#fbc02d' });
-                  if (!tooMuchVariance && !notEnoughSimilar) tags.push({ label: 'Reliable prediction', color: '#43a047' });
-                }
+                // Add ALL relevant tags if their conditions apply
+                if (variance <= 0.1 && similarity <= -5.25) tags.push({ label: 'Reliable prediction', color: '#43a047' });
+                if (variance > 0.1 && similarity > -5.25) tags.push({ label: 'Very unreliable', color: '#e53935' });
+                if (variance > 0.1) tags.push({ label: 'Too much variance', color: '#ff9800' });
+                if (variance > 0.45) tags.push({ label: 'Extremely unreliable model', color: '#e53935' });
+                if (similarity > -5.25) tags.push({ label: 'Not enough similar data', color: '#ff9800' });
+                if (similarity > -1.87) tags.push({ label: 'Extremely unreliable data', color: '#e53935' });
+                // Remove duplicate tags by label
+                const uniqueTags = Array.from(new Map(tags.map(tag => [tag.label, tag])).values());
                 return (
                   <div className="flex flex-wrap gap-2 mt-2 justify-center">
-                    {tags.map((tag, idx) => (
+                    {uniqueTags.map((tag, idx) => (
                       <span
                         key={tag.label + idx}
                         className="px-3 py-1 rounded-full text-sm font-semibold flex items-center"
@@ -299,46 +299,89 @@ export default function MapDemo() {
           </div>
 
           <div className="mb-6">
-            <label className={`text-base ${selectedFeature.properties.Variance_pred_scaled > 0.1 ? 'text-[#e53935]' : 'text-gray-600'}`}>Variance Uncertainty:</label>
-            <span className={`text-base ml-3 ${selectedFeature.properties.Variance_pred_scaled > 0.1 ? 'text-[#e53935]' : 'text-[#222]'}`}>{selectedFeature.properties.Variance_pred_scaled !== undefined ? selectedFeature.properties.Variance_pred_scaled.toFixed(2) : 'N/A'}</span>
-
-            <div className="flex flex-col w-full max-w-[320px]">
-              <div className="bg-gray-200 rounded h-[22px] w-full relative">
-                <div
-                  className="absolute left-0 top-0 h-full rounded transition-all"
-                  style={{
-                    width: `${selectedFeature.properties.Variance_pred_scaled !== undefined ? Math.min(Math.round(((selectedFeature.properties.Variance_pred_scaled - 0.0) / (0.264 - 0.0)) * 100), 100) : 0}%`,
-                    background: selectedFeature.properties.Variance_pred_scaled > 0.1 ? '#e53935' : getColor(selectedFeature.properties.Variance_pred_scaled)
-                  }}
-                />
-              </div>
-              <div className="flex justify-between mt-1 w-full">
-                <span className="text-xs text-gray-500">0.00</span>
-                <span className="text-xs text-gray-500">0.264</span>
-              </div>
-            </div>
-            {/* <span className={`text-base ml-3 ${selectedFeature.properties.Variance_pred_scaled > 0.1 ? 'text-[#e53935]' : 'text-[#222]'}`}>{selectedFeature.properties.Variance_pred_scaled !== undefined ? selectedFeature.properties.Variance_pred_scaled.toFixed(2) : 'N/A'}</span> */}
+            {(() => {
+              const variance = selectedFeature.properties.Variance_pred_scaled;
+              const minVariance = 0.0;
+              const maxVariance = 0.264;
+              const reliabilityScore = variance !== undefined ? 1 - ((variance - minVariance) / (maxVariance - minVariance)) : 0;
+              const reliabilityColor = reliabilityScore > 0.7 ? '#43a047' : reliabilityScore > 0.4 ? '#ff9800' : '#e53935';
+              return (
+                <>
+                  <label className={`text-base`} style={{ color: reliabilityColor }}>
+                    Model Reliability:
+                  </label>
+                  <span className={`text-base ml-3`} style={{ color: reliabilityColor }}>
+                    {reliabilityScore.toFixed(2)}
+                  </span>
+                  <span className="ml-2 cursor-pointer group relative" tabIndex={0} aria-label="Show reliability details">
+                    <svg width="16" height="16" fill="currentColor" className="inline-block text-gray-200 group-hover:text-gray-700" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" stroke="currentColor" strokeWidth="2" fill="none" /><text x="10" y="14" textAnchor="middle" fontSize="12" fill="currentColor" fontFamily="Arial">i</text></svg>
+                    <div className="absolute left-1/2 -translate-x-1/2 mt-2 z-10 w-max min-w-[220px] bg-white border border-gray-300 rounded shadow-lg p-3 text-xs text-gray-700 opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition pointer-events-none group-hover:pointer-events-auto group-focus:pointer-events-auto">
+                      <div>Variance_pred_scaled: <b>{variance}</b></div>
+                      <div>Reliability Range: <b>{minVariance} (best) to {maxVariance} (worst)</b></div>
+                      <div>Reliability Score: <b>{reliabilityScore.toFixed(4)}</b></div>
+                    </div>
+                  </span>
+                  <div className="flex flex-col w-full max-w-[320px] mt-2">
+                    <div className="bg-gray-200 rounded h-[22px] w-full relative">
+                      <div
+                        className="absolute left-0 top-0 h-full rounded transition-all"
+                        style={{
+                          width: `${Math.max(Math.min(Math.round(reliabilityScore * 100), 100), 0)}%`,
+                          background: reliabilityColor
+                        }}
+                      />
+                    </div>
+                    <div className="flex justify-between mt-1 w-full">
+                      <span className="text-xs text-gray-500">Low</span>
+                      <span className="text-xs text-gray-500">High</span>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
           </div>
 
           <div className="mb-6">
-            <label className={`text-base ${selectedFeature.properties.ncdd_embeddings > -5.25 ? 'text-[#e53935]' : 'text-gray-600'}`}>Cluster Similarity Score:</label>
-            <span className={`text-base ml-3 ${selectedFeature.properties.ncdd_embeddings > -5.25 ? 'text-[#e53935]' : 'text-[#222]'}`}>{selectedFeature.properties.ncdd_embeddings !== undefined ? selectedFeature.properties.ncdd_embeddings.toFixed(2) : 'N/A'}</span>
-
-            <div className="flex flex-col w-full max-w-[320px]">
-              <div className="bg-gray-200 rounded h-[22px] w-full relative">
-                <div
-                  className="absolute left-0 top-0 h-full rounded transition-all"
-                  style={{
-                    width: `${selectedFeature.properties.ncdd_embeddings !== undefined ? Math.min(Math.round(((selectedFeature.properties.ncdd_embeddings - (-8.22)) / ((-1.87) - (-8.22))) * 100), 100) : 0}%`,
-                    background: selectedFeature.properties.ncdd_embeddings > -5.25 ? '#e53935' : getEmbeddingColor(selectedFeature.properties.ncdd_embeddings)
-                  }}
-                />
-              </div>
-              <div className="flex justify-between mt-1 w-full">
-                <div className="text-xs text-gray-500">-8.22</div>
-                <div className="text-xs text-gray-500">-1.87</div>
-              </div>
-            </div>
+            {(() => {
+              const similarity = selectedFeature.properties.ncdd_embeddings;
+              const minSimilarity = -8.22;
+              const maxSimilarity = -1.87;
+              const dataReliabilityScore = similarity !== undefined ? 1 - ((similarity - minSimilarity) / (maxSimilarity - minSimilarity)) : 0;
+              const dataReliabilityColor = dataReliabilityScore > 0.7 ? '#43a047' : dataReliabilityScore > 0.4 ? '#ff9800' : '#e53935';
+              return (
+                <>
+                  <label className={`text-base`} style={{ color: dataReliabilityColor }}>
+                    Data Reliability:
+                  </label>
+                  <span className={`text-base ml-3`} style={{ color: dataReliabilityColor }}>
+                    {dataReliabilityScore.toFixed(2)}
+                  </span>
+                  <span className="ml-2 cursor-pointer group relative" tabIndex={0} aria-label="Show data reliability details">
+                    <svg width="16" height="16" fill="currentColor" className="inline-block text-gray-200 group-hover:text-gray-700" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" stroke="currentColor" strokeWidth="2" fill="none" /><text x="10" y="14" textAnchor="middle" fontSize="12" fill="currentColor" fontFamily="Arial">i</text></svg>
+                    <div className="absolute left-1/2 -translate-x-1/2 mt-2 z-10 w-max min-w-[220px] bg-white border border-gray-300 rounded shadow-lg p-3 text-xs text-gray-700 opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition pointer-events-none group-hover:pointer-events-auto group-focus:pointer-events-auto">
+                      <div>ncdd_embeddings: <b>{similarity}</b></div>
+                      <div>Reliability Range: <b>{minSimilarity} (best) to {maxSimilarity} (worst)</b></div>
+                      <div>Reliability Score: <b>{dataReliabilityScore.toFixed(4)}</b></div>
+                    </div>
+                  </span>
+                  <div className="flex flex-col w-full max-w-[320px] mt-2">
+                    <div className="bg-gray-200 rounded h-[22px] w-full relative">
+                      <div
+                        className="absolute left-0 top-0 h-full rounded transition-all"
+                        style={{
+                          width: `${Math.max(Math.min(Math.round(dataReliabilityScore * 100), 100), 0)}%`,
+                          background: dataReliabilityColor
+                        }}
+                      />
+                    </div>
+                    <div className="flex justify-between mt-1 w-full">
+                      <span className="text-xs text-gray-500">Low</span>
+                      <span className="text-xs text-gray-500">High</span>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}
