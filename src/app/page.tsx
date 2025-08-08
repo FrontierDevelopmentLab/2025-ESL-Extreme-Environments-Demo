@@ -3,30 +3,16 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import dynamic from "next/dynamic";
 import "leaflet/dist/leaflet.css";
 import Image from "next/image";
+import type { Feature, FeatureCollection, Point } from "geojson";
 
-const MapContainer = dynamic(() => import("react-leaflet").then(mod => mod.MapContainer), { ssr: false });
-const TileLayer = dynamic(() => import("react-leaflet").then(mod => mod.TileLayer), { ssr: false });
-const Marker = dynamic(() => import("react-leaflet").then(mod => mod.Marker), { ssr: false });
-
-let Icon: any = null;
-if (typeof window !== "undefined") {
-  Icon = require("leaflet").Icon;
-}
+const MyMap = dynamic(() => import("../components/MyMap"), { ssr: false });
 
 export default function MapDemo() {
   const [modal, setModal] = useState<{ open: boolean; content: string }>({ open: false, content: "" });
-  const [selectedFeature, setSelectedFeature] = useState<any>(null);
-  const [geojson, setGeojson] = useState<any>(null);
+  const [selectedFeature, setSelectedFeature] = useState<Feature<Point, Record<string, unknown>> | null>(null);
+  const [geojson, setGeojson] = useState<FeatureCollection<Point, Record<string, unknown>> | null>(null);
   const [locationInfo, setLocationInfo] = useState<string>("");
-  const mapRef = useRef<any>(null);
-
-  function getReliabilityColor(variance: number, ncdd: number) {
-    const unreliableVariance = variance > 0.1;
-    const unreliableNcdd = ncdd > -5.25;
-    if (unreliableVariance && unreliableNcdd) return "#e53935";
-    if (unreliableVariance || unreliableNcdd) return "#ff9800";
-    return "#43a047";
-  }
+  const mapRef = useRef<L.Map | null>(null);
 
   function getLocationName(lat: number, lng: number) {
     return `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
@@ -35,26 +21,32 @@ export default function MapDemo() {
   useEffect(() => {
     fetch("/data/reduced.geojson")
       .then(res => res.json())
-      .then(setGeojson);
+      .then((data: FeatureCollection<Point, Record<string, unknown>>) => setGeojson(data));
   }, []);
 
-  const allLatLngs = useMemo(() => {
+  const allLatLngs: [number, number][] = useMemo(() => {
     if (!geojson) return [];
     return geojson.features
-      .filter((f: any) => f && f.geometry && Array.isArray(f.geometry.coordinates) && f.geometry.coordinates.length === 2)
-      .map((f: any) => [f.geometry.coordinates[1], f.geometry.coordinates[0]]);
+      .filter((f): f is Feature<Point, Record<string, unknown>> => f && f.geometry && f.geometry.type === "Point" && Array.isArray(f.geometry.coordinates) && f.geometry.coordinates.length === 2)
+      .map((f) => [f.geometry.coordinates[1], f.geometry.coordinates[0]]);
   }, [geojson]);
 
   useEffect(() => {
     if (mapRef.current && allLatLngs.length > 0) {
-      const L = require("leaflet");
-      const bounds = L.latLngBounds(allLatLngs);
-      mapRef.current.fitBounds(bounds, { padding: [32, 32], maxZoom: 10 });
+      import("leaflet").then(L => {
+        const bounds = L.latLngBounds(allLatLngs as [number, number][]);
+        mapRef.current?.fitBounds(bounds, { padding: [32, 32], maxZoom: 10 });
+      });
     }
   }, [allLatLngs]);
 
   useEffect(() => {
-    if (selectedFeature && selectedFeature.geometry && Array.isArray(selectedFeature.geometry.coordinates)) {
+    if (
+      selectedFeature &&
+      selectedFeature.geometry &&
+      selectedFeature.geometry.type === "Point" &&
+      Array.isArray(selectedFeature.geometry.coordinates)
+    ) {
       const lat = selectedFeature.geometry.coordinates[1];
       const lon = selectedFeature.geometry.coordinates[0];
       fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`)
@@ -85,57 +77,19 @@ export default function MapDemo() {
     20: "Water Bodies"
   };
 
-  function round(num: number, decimals: number) {
-    const factor = Math.pow(10, decimals);
-    return Math.round(num * factor) / factor;
-  }
-
   function roundFixed(num: number, decimals: number) {
     return (Math.round(num * Math.pow(10, decimals)) / Math.pow(10, decimals)).toFixed(decimals);
   }
 
   return (
     <div className="h-screen w-full">
-      <MapContainer ref={mapRef} center={[39.8283, -98.5795]} zoom={5} minZoom={2} style={{ height: "100%", width: "100%" }}>
-        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-        {(() => {
-          const latLonArr: [number, number][] = [];
-          const markers = Icon && geojson && geojson.features.filter((_: any, idx: number) => idx % 2 === 0).map((feature: any, idx: number) => {
-            if (!feature || !feature.geometry || !Array.isArray(feature.geometry.coordinates) || feature.geometry.coordinates.length !== 2 || !feature.properties) return null;
-            const [lon, lat] = feature.geometry.coordinates;
-            latLonArr.push([lat, lon]);
-            const variance = feature.properties.Variance_pred_scaled;
-            const ncdd = feature.properties.ncdd_embeddings;
-            const markerColor = getReliabilityColor(variance, ncdd);
-            const iconSvg = `
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="${markerColor}" xmlns="http://www.w3.org/2000/svg">
-                <path d="M11.9998 8.99999V13M11.9998 17H12.0098M10.6151 3.89171L2.39019 18.0983C1.93398 18.8863 1.70588 19.2803 1.73959 19.6037C1.769 19.8857 1.91677 20.142 2.14613 20.3088C2.40908 20.5 2.86435 20.5 3.77487 20.5H20.2246C21.1352 20.5 21.5904 20.5 21.8534 20.3088C22.0827 20.142 22.2305 19.8857 22.2599 19.6037C22.2936 19.2803 22.0655 18.8863 21.6093 18.0983L13.3844 3.89171C12.9299 3.10654 12.7026 2.71396 12.4061 2.58211C12.1474 2.4671 11.8521 2.4671 11.5935 2.58211C11.2969 2.71396 11.0696 3.10655 10.6151 3.89171Z" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            `;
-            const markerIcon = new Icon({
-              iconUrl: `data:image/svg+xml;utf8,${encodeURIComponent(iconSvg)}`,
-              iconSize: [32, 32],
-              iconAnchor: [16, 32],
-              popupAnchor: [0, -32],
-            });
-            const handleClick = () => {
-              setSelectedFeature(feature);
-              if (mapRef.current) {
-                mapRef.current.setView([lat, lon + 2], 7);
-              }
-            };
-            return (
-              <Marker
-                key={"geojson-" + idx}
-                position={[lat, lon]}
-                icon={markerIcon}
-                eventHandlers={{ click: handleClick }}
-              />
-            );
-          });
-          return markers;
-        })()}
-      </MapContainer>
+      <MyMap
+        geojson={geojson}
+        onMarkerClick={(feature: Feature<Point, Record<string, unknown>>) => setSelectedFeature(feature)}
+        mapRef={mapRef}
+        center={[39.8283, -98.5795]}
+        zoom={5}
+      />
       {modal.open && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
           <div className="bg-white p-6 rounded-lg min-w-[300px]">
@@ -154,11 +108,11 @@ export default function MapDemo() {
             &times;
           </button>
           <strong className="text-2xl mb-2 text-[#222]">
-            {locationInfo || getLocationName(selectedFeature.geometry.coordinates[1], selectedFeature.geometry.coordinates[0])}
+            {locationInfo || (selectedFeature && selectedFeature.geometry && selectedFeature.geometry.type === "Point" ? getLocationName(selectedFeature.geometry.coordinates[1], selectedFeature.geometry.coordinates[0]) : "")}
           </strong>
           <div className="mb-6">
             <div className="text-lg text-[#222] mt-1">
-              {glc2000_classes[selectedFeature.properties.glc_cl_smj] || `Unknown (${selectedFeature.properties.glc_cl_smj})`}
+              {glc2000_classes[selectedFeature.properties.glc_cl_smj as number] || `Unknown (${selectedFeature.properties.glc_cl_smj})`}
             </div>
           </div>
           <div className="flex flex-col gap-6 mb-6 justify-center">
@@ -200,9 +154,9 @@ export default function MapDemo() {
             </div>
             <div className="flex flex-col items-center">
               {(() => {
-                const variance = selectedFeature.properties.Variance_pred_scaled;
-                const similarity = selectedFeature.properties.ncdd_embeddings;
-                let tags = [];
+                const variance = selectedFeature.properties.Variance_pred_scaled as number;
+                const similarity = selectedFeature.properties.ncdd_embeddings as number;
+                const tags: { label: string; color: string }[] = [];
                 if (variance <= 0.1 && similarity <= -5.25) tags.push({ label: "Reliable prediction", color: "#43a047" });
                 if (variance > 0.1 && similarity > -5.25) tags.push({ label: "Very unreliable", color: "#e53935" });
                 if (variance > 0.1) tags.push({ label: "Too much variance", color: "#ff9800" });
@@ -228,7 +182,7 @@ export default function MapDemo() {
           </div>
           <div className="mb-6">
             {(() => {
-              const variance = selectedFeature.properties.Variance_pred_scaled;
+              const variance = selectedFeature.properties.Variance_pred_scaled as number;
               const minVariance = 0.0;
               const maxVariance = 0.264;
               const reliabilityScore = variance !== undefined ? 1 - ((variance - minVariance) / (maxVariance - minVariance)) : 0;
@@ -270,7 +224,7 @@ export default function MapDemo() {
           </div>
           <div className="mb-6">
             {(() => {
-              const similarity = selectedFeature.properties.ncdd_embeddings;
+              const similarity = selectedFeature.properties.ncdd_embeddings as number;
               const minSimilarity = -8.22;
               const maxSimilarity = -1.87;
               const dataReliabilityScore = similarity !== undefined ? 1 - ((similarity - minSimilarity) / (maxSimilarity - minSimilarity)) : 0;
