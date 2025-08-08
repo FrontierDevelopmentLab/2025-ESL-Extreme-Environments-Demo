@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import dynamic from "next/dynamic";
 import "leaflet/dist/leaflet.css";
-import Image from 'next/image';
+import Image from "next/image";
 
 const MapContainer = dynamic(() => import("react-leaflet").then(mod => mod.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import("react-leaflet").then(mod => mod.TileLayer), { ssr: false });
@@ -20,36 +20,31 @@ export default function MapDemo() {
   const [locationInfo, setLocationInfo] = useState<string>("");
   const mapRef = useRef<any>(null);
 
-  // Helper to get marker color based on reliability
   function getReliabilityColor(variance: number, ncdd: number) {
     const unreliableVariance = variance > 0.1;
     const unreliableNcdd = ncdd > -5.25;
-    if (unreliableVariance && unreliableNcdd) return '#e53935'; // red
-    if (unreliableVariance || unreliableNcdd) return '#ff9800'; // orange
-    return '#43a047'; // green
+    if (unreliableVariance && unreliableNcdd) return "#e53935";
+    if (unreliableVariance || unreliableNcdd) return "#ff9800";
+    return "#43a047";
   }
 
-  // Placeholder: In production, use a geocoding API
   function getLocationName(lat: number, lng: number) {
     return `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
   }
 
-  // Load GeoJSON data dynamically
   useEffect(() => {
     fetch("/data/reduced.geojson")
       .then(res => res.json())
       .then(setGeojson);
   }, []);
 
-  // Gather all lat/lng points
   const allLatLngs = useMemo(() => {
     if (!geojson) return [];
     return geojson.features
       .filter((f: any) => f && f.geometry && Array.isArray(f.geometry.coordinates) && f.geometry.coordinates.length === 2)
-      .map((f: any) => [f.geometry.coordinates[1], f.geometry.coordinates[0]]); // [lat, lng]
+      .map((f: any) => [f.geometry.coordinates[1], f.geometry.coordinates[0]]);
   }, [geojson]);
 
-  // Fit bounds after map loads
   useEffect(() => {
     if (mapRef.current && allLatLngs.length > 0) {
       const L = require("leaflet");
@@ -68,7 +63,7 @@ export default function MapDemo() {
           const city = data.city || data.locality || "";
           const state = data.principalSubdivision || "";
           const country = data.countryCode || "";
-          setLocationInfo(`${city}${city ? ', ' : ''}${state}${state ? ', ' : ''}${country}`);
+          setLocationInfo(`${city}${city ? ", " : ""}${state}${state ? ", " : ""}${country}`);
         })
         .catch(() => setLocationInfo(""));
     } else {
@@ -76,7 +71,6 @@ export default function MapDemo() {
     }
   }, [selectedFeature]);
 
-  // Lookup table for glc_cl_smj land cover types
   const glc2000_classes: Record<number, string> = {
     2: "Broadleaf Deciduous Forest (Closed)",
     4: "Needleleaf Evergreen Forest",
@@ -104,7 +98,6 @@ export default function MapDemo() {
     <div className="h-screen w-full">
       <MapContainer ref={mapRef} center={[39.8283, -98.5795]} zoom={5} minZoom={2} style={{ height: "100%", width: "100%" }}>
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-        {/* Render every other geojson point as a marker with custom icon */}
         {(() => {
           const latLonArr: [number, number][] = [];
           const markers = Icon && geojson && geojson.features.filter((_: any, idx: number) => idx % 2 === 0).map((feature: any, idx: number) => {
@@ -128,7 +121,6 @@ export default function MapDemo() {
             const handleClick = () => {
               setSelectedFeature(feature);
               if (mapRef.current) {
-                // Offset longitude by +2 degrees to shift center right for datapane
                 mapRef.current.setView([lat, lon + 2], 7);
               }
             };
@@ -177,14 +169,13 @@ export default function MapDemo() {
                   const lonStr = roundFixed(lon, 4);
                   const latStr = roundFixed(lat, 4);
                   const predictedPath = `/gcp-imgs/${lonStr}_${latStr}_predicted_mask.png`;
-                  console.log('Predicted image path:', predictedPath);
                   return (
                     <Image
                       src={predictedPath}
                       alt="Predicted"
                       fill
                       className="object-contain rounded-lg w-full h-full"
-                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      onError={e => { e.currentTarget.style.display = "none"; }}
                     />
                   );
                 })()}
@@ -195,14 +186,13 @@ export default function MapDemo() {
                   const lonStr = roundFixed(lon, 4);
                   const latStr = roundFixed(lat, 4);
                   const probabilitiesPath = `/gcp-imgs/${lonStr}_${latStr}_probabilites.png`;
-                  console.log('Probabilities image path:', probabilitiesPath);
                   return (
                     <Image
                       src={probabilitiesPath}
                       alt="Probabilities"
                       fill
                       className="object-contain rounded-lg w-full h-full"
-                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      onError={e => { e.currentTarget.style.display = "none"; }}
                     />
                   );
                 })()}
@@ -213,12 +203,12 @@ export default function MapDemo() {
                 const variance = selectedFeature.properties.Variance_pred_scaled;
                 const similarity = selectedFeature.properties.ncdd_embeddings;
                 let tags = [];
-                if (variance <= 0.1 && similarity <= -5.25) tags.push({ label: 'Reliable prediction', color: '#43a047' });
-                if (variance > 0.1 && similarity > -5.25) tags.push({ label: 'Very unreliable', color: '#e53935' });
-                if (variance > 0.1) tags.push({ label: 'Too much variance', color: '#ff9800' });
-                if (variance > 0.45) tags.push({ label: 'Extremely unreliable model', color: '#e53935' });
-                if (similarity > -5.25) tags.push({ label: 'Not enough similar data', color: '#ff9800' });
-                if (similarity > -1.87) tags.push({ label: 'Extremely unreliable data', color: '#e53935' });
+                if (variance <= 0.1 && similarity <= -5.25) tags.push({ label: "Reliable prediction", color: "#43a047" });
+                if (variance > 0.1 && similarity > -5.25) tags.push({ label: "Very unreliable", color: "#e53935" });
+                if (variance > 0.1) tags.push({ label: "Too much variance", color: "#ff9800" });
+                if (variance > 0.45) tags.push({ label: "Extremely unreliable model", color: "#e53935" });
+                if (similarity > -5.25) tags.push({ label: "Not enough similar data", color: "#ff9800" });
+                if (similarity > -1.87) tags.push({ label: "Extremely unreliable data", color: "#e53935" });
                 const uniqueTags = Array.from(new Map(tags.map(tag => [tag.label, tag])).values());
                 return (
                   <div className="flex flex-wrap gap-2 mt-2 justify-center">
@@ -226,7 +216,7 @@ export default function MapDemo() {
                       <span
                         key={tag.label + idx}
                         className="px-3 py-1 rounded-full text-sm font-semibold flex items-center"
-                        style={{ background: tag.color, color: '#fff' }}
+                        style={{ background: tag.color, color: "#fff" }}
                       >
                         <span className="mr-1"></span>{tag.label}
                       </span>
@@ -242,13 +232,13 @@ export default function MapDemo() {
               const minVariance = 0.0;
               const maxVariance = 0.264;
               const reliabilityScore = variance !== undefined ? 1 - ((variance - minVariance) / (maxVariance - minVariance)) : 0;
-              const reliabilityColor = reliabilityScore > 0.7 ? '#43a047' : reliabilityScore > 0.4 ? '#ff9800' : '#e53935';
+              const reliabilityColor = reliabilityScore > 0.7 ? "#43a047" : reliabilityScore > 0.4 ? "#ff9800" : "#e53935";
               return (
                 <>
-                  <label className={`text-base`} style={{ color: reliabilityColor }}>
+                  <label className="text-base" style={{ color: reliabilityColor }}>
                     Model Reliability:
                   </label>
-                  <span className={`text-base ml-3`} style={{ color: reliabilityColor }}>
+                  <span className="text-base ml-3" style={{ color: reliabilityColor }}>
                     {reliabilityScore.toFixed(2)}
                   </span>
                   <span className="ml-2 cursor-pointer group relative" tabIndex={0} aria-label="Show reliability details">
@@ -284,13 +274,13 @@ export default function MapDemo() {
               const minSimilarity = -8.22;
               const maxSimilarity = -1.87;
               const dataReliabilityScore = similarity !== undefined ? 1 - ((similarity - minSimilarity) / (maxSimilarity - minSimilarity)) : 0;
-              const dataReliabilityColor = dataReliabilityScore > 0.7 ? '#43a047' : dataReliabilityScore > 0.4 ? '#ff9800' : '#e53935';
+              const dataReliabilityColor = dataReliabilityScore > 0.7 ? "#43a047" : dataReliabilityScore > 0.4 ? "#ff9800" : "#e53935";
               return (
                 <>
-                  <label className={`text-base`} style={{ color: dataReliabilityColor }}>
+                  <label className="text-base" style={{ color: dataReliabilityColor }}>
                     Data Reliability:
                   </label>
-                  <span className={`text-base ml-3`} style={{ color: dataReliabilityColor }}>
+                  <span className="text-base ml-3" style={{ color: dataReliabilityColor }}>
                     {dataReliabilityScore.toFixed(2)}
                   </span>
                   <span className="ml-2 cursor-pointer group relative" tabIndex={0} aria-label="Show data reliability details">
@@ -333,7 +323,7 @@ export default function MapDemo() {
           alt="Badge"
           width={modal.open && modal.content === "badge" ? 400 : 150}
           height={modal.open && modal.content === "badge" ? 400 : 150}
-          className={`rounded-lg transition-all duration-500`} // Remove Tailwind shadow classes
+          className="rounded-lg transition-all duration-500"
           style={{ boxShadow: "none" }}
           draggable={false}
         />
