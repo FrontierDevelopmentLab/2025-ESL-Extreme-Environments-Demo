@@ -12,6 +12,8 @@ export default function MapDemo() {
   const [selectedFeature, setSelectedFeature] = useState<Feature<Point, Record<string, unknown>> | null>(null);
   const [geojson, setGeojson] = useState<FeatureCollection<Point, Record<string, unknown>> | null>(null);
   const [locationInfo, setLocationInfo] = useState<string>("");
+  const [imagesLoaded, setImagesLoaded] = useState({ predicted: false, probabilities: false });
+  const [spinnerVisible, setSpinnerVisible] = useState(false);
   const mapRef = useRef<L.Map | null>(null);
 
   function getLocationName(lat: number, lng: number) {
@@ -81,6 +83,28 @@ export default function MapDemo() {
     return (Math.round(num * Math.pow(10, decimals)) / Math.pow(10, decimals)).toFixed(decimals);
   }
 
+  useEffect(() => {
+    if (
+      selectedFeature &&
+      selectedFeature.geometry &&
+      selectedFeature.geometry.type === "Point" &&
+      Array.isArray(selectedFeature.geometry.coordinates)
+    ) {
+      setImagesLoaded({ predicted: false, probabilities: false });
+    }
+  }, [selectedFeature]);
+
+  useEffect(() => {
+    let timeout: NodeJS.Timeout | null = null;
+    if (selectedFeature && !(imagesLoaded.predicted && imagesLoaded.probabilities)) {
+      setSpinnerVisible(false);
+      timeout = setTimeout(() => setSpinnerVisible(true), 50); // fade in after 50ms
+    } else {
+      setSpinnerVisible(false);
+    }
+    return () => { if (timeout) clearTimeout(timeout); };
+  }, [selectedFeature, imagesLoaded]);
+
   return (
     <div className="h-screen w-full">
       <MyMap
@@ -129,7 +153,8 @@ export default function MapDemo() {
                       alt="Predicted"
                       fill
                       className="object-contain rounded-lg w-full h-full"
-                      onError={e => { e.currentTarget.style.display = "none"; }}
+                      onLoad={() => setImagesLoaded(l => ({ ...l, predicted: true }))}
+                      onError={e => { e.currentTarget.style.display = "none"; setImagesLoaded(l => ({ ...l, predicted: true })); }}
                     />
                   );
                 })()}
@@ -146,39 +171,40 @@ export default function MapDemo() {
                       alt="Probabilities"
                       fill
                       className="object-contain rounded-lg w-full h-full"
-                      onError={e => { e.currentTarget.style.display = "none"; }}
+                      onLoad={() => setImagesLoaded(l => ({ ...l, probabilities: true }))}
+                      onError={e => { e.currentTarget.style.display = "none"; setImagesLoaded(l => ({ ...l, probabilities: true })); }}
                     />
                   );
                 })()}
               </div>
             </div>
-            <div className="flex flex-col items-center">
-              {(() => {
-                const variance = selectedFeature.properties.Variance_pred_scaled as number;
-                const similarity = selectedFeature.properties.ncdd_embeddings as number;
-                const tags: { label: string; color: string }[] = [];
-                if (variance <= 0.1 && similarity <= -5.25) tags.push({ label: "Reliable prediction", color: "#43a047" });
-                if (variance > 0.1 && similarity > -5.25) tags.push({ label: "Very unreliable", color: "#e53935" });
-                if (variance > 0.1) tags.push({ label: "Too much variance", color: "#ff9800" });
-                if (variance > 0.45) tags.push({ label: "Extremely unreliable model", color: "#e53935" });
-                if (similarity > -5.25) tags.push({ label: "Not enough similar data", color: "#ff9800" });
-                if (similarity > -1.87) tags.push({ label: "Extremely unreliable data", color: "#e53935" });
-                const uniqueTags = Array.from(new Map(tags.map(tag => [tag.label, tag])).values());
-                return (
-                  <div className="flex flex-wrap gap-2 mt-2 justify-center">
-                    {uniqueTags.map((tag, idx) => (
-                      <span
-                        key={tag.label + idx}
-                        className="px-3 py-1 rounded-full text-sm font-semibold flex items-center"
-                        style={{ background: tag.color, color: "#fff" }}
-                      >
-                        <span className="mr-1"></span>{tag.label}
-                      </span>
-                    ))}
-                  </div>
-                );
-              })()}
-            </div>
+          </div>
+          <div className="mb-6">
+            {(() => {
+              const variance = selectedFeature.properties.Variance_pred_scaled as number;
+              const similarity = selectedFeature.properties.ncdd_embeddings as number;
+              const tags: { label: string; color: string }[] = [];
+              if (variance <= 0.1 && similarity <= -5.25) tags.push({ label: "Reliable prediction", color: "#43a047" });
+              if (variance > 0.1 && similarity > -5.25) tags.push({ label: "Very unreliable", color: "#e53935" });
+              if (variance > 0.1) tags.push({ label: "Too much variance", color: "#ff9800" });
+              if (variance > 0.45) tags.push({ label: "Extremely unreliable model", color: "#e53935" });
+              if (similarity > -5.25) tags.push({ label: "Not enough similar data", color: "#ff9800" });
+              if (similarity > -1.87) tags.push({ label: "Extremely unreliable data", color: "#e53935" });
+              const uniqueTags = Array.from(new Map(tags.map(tag => [tag.label, tag])).values());
+              return (
+                <div className="flex flex-wrap gap-2 mt-2 justify-center">
+                  {uniqueTags.map((tag, idx) => (
+                    <span
+                      key={tag.label + idx}
+                      className="px-3 py-1 rounded-full text-sm font-semibold flex items-center"
+                      style={{ background: tag.color, color: "#fff" }}
+                    >
+                      <span className="mr-1"></span>{tag.label}
+                    </span>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
           <div className="mb-6">
             {(() => {
@@ -264,6 +290,11 @@ export default function MapDemo() {
               );
             })()}
           </div>
+        </div>
+      )}
+      {selectedFeature && !(imagesLoaded.predicted && imagesLoaded.probabilities) && (
+        <div className="fixed top-0 right-0 h-screen w-[min(50vw,600px)] bg-white flex items-center justify-center z-[1000]">
+          <div className={`w-8 h-8 border-4 border-gray-300 border-t-gray-500 rounded-full animate-spin transition-opacity duration-300 ${spinnerVisible ? 'opacity-100' : 'opacity-0'}`}></div>
         </div>
       )}
       <div
