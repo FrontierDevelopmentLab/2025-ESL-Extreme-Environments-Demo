@@ -20,54 +20,13 @@ export default function MapDemo() {
   const [locationInfo, setLocationInfo] = useState<string>("");
   const mapRef = useRef<any>(null);
 
-  // Helper to get color based on Variance_pred_scaled
-  function getColor(variance: number) {
-    if (variance > 0.45) return "#e53935"; // red
-    if (variance > 0.3) return "#fbc02d"; // yellow
-    return "#43a047"; // green
-  }
-
-  // Helper to get color for ncdd_embeddings
-  function getEmbeddingColor(embedding: number) {
-    // Use similarity thresholds: -8.22 (best), -5.25 (threshold)
-    if (embedding > -5.25) return "#e53935"; // red (unreliable)
-    if (embedding > -7.0) return "#fbc02d"; // yellow (intermediate)
-    return "#43a047"; // green (reliable)
-  }
-
   // Helper to get marker color based on reliability
   function getReliabilityColor(variance: number, ncdd: number) {
     const unreliableVariance = variance > 0.1;
     const unreliableNcdd = ncdd > -5.25;
     if (unreliableVariance && unreliableNcdd) return '#e53935'; // red
-    if (unreliableVariance || unreliableNcdd) return '#fbc02d'; // orange
+    if (unreliableVariance || unreliableNcdd) return '#ff9800'; // orange
     return '#43a047'; // green
-  }
-
-  // Helper to get reliability from variance
-  function getVarianceReliability(variance: number) {
-    // 0.0 (best) to 0.1 (threshold), above 0.1 is unreliable
-    if (variance === undefined || variance === null) return 0;
-    if (variance > 0.1) return 0; // Explicitly unreliable
-    // Reliability decreases linearly from 1 (variance=0) to 0 (variance=0.1)
-    return 1 - (variance / 0.1);
-  }
-  // Helper to get reliability from similarity
-  function getSimilarityReliability(similarity: number) {
-    // -8.22 (best) to -5.25 (threshold), above -5.25 is unreliable
-    if (similarity === undefined || similarity === null) return 0;
-    if (similarity > -5.25) return 0; // Explicitly unreliable
-    // Reliability decreases linearly from 1 (similarity=-8.22) to 0 (similarity=-5.25)
-    const min = -8.22;
-    const max = -5.25;
-    if (similarity <= min) return 1;
-    return 1 - ((similarity - min) / (max - min));
-  }
-  // Helper to get reliability color
-  function getReliabilityColorMeter(score: number) {
-    if (score > 0.7) return '#43a047'; // green
-    if (score > 0.4) return '#fbc02d'; // yellow
-    return '#e53935'; // red
   }
 
   // Placeholder: In production, use a geocoding API
@@ -98,22 +57,6 @@ export default function MapDemo() {
       mapRef.current.fitBounds(bounds, { padding: [32, 32], maxZoom: 10 });
     }
   }, [allLatLngs]);
-
-  // Memoize icons only on client
-  const warningIcons = useMemo(() => {
-    if (!Icon || !geojson) return [];
-    return geojson.features.map((feature: any) => {
-      if (!feature || !feature.geometry || !Array.isArray(feature.geometry.coordinates) || feature.geometry.coordinates.length !== 2 || !feature.properties) return null;
-      const variance = feature.properties.Variance_pred_scaled;
-      const color = getColor(variance);
-      return new Icon({
-        iconUrl: `data:image/svg+xml;utf8,${encodeURIComponent(`<svg width='32' height='32' viewBox='0 0 32 32' xmlns='http://www.w3.org/2000/svg'><circle cx='16' cy='16' r='14' fill='${color}' stroke='black' stroke-width='2'/><text x='16' y='22' text-anchor='middle' font-size='18' fill='white' font-family='Arial' font-weight='bold'>!</text></svg>`)}`,
-        iconSize: [32, 32],
-        iconAnchor: [16, 32],
-        popupAnchor: [0, -32],
-      });
-    });
-  }, [Icon, geojson]);
 
   useEffect(() => {
     if (selectedFeature && selectedFeature.geometry && Array.isArray(selectedFeature.geometry.coordinates)) {
@@ -184,14 +127,6 @@ export default function MapDemo() {
               />
             );
           });
-          if (latLonArr.length) {
-            latLonArr.forEach(([lat, lon]) => {
-              console.log(
-                `${lat}_${lon}_predicted_mask.png`,
-                `${lat}_${lon}_probabilities.png`
-              );
-            });
-          }
           return markers;
         })()}
       </MapContainer>
@@ -212,40 +147,15 @@ export default function MapDemo() {
           >
             &times;
           </button>
-
-
           <strong className="text-2xl mb-2 text-[#222]">
             {locationInfo || getLocationName(selectedFeature.geometry.coordinates[1], selectedFeature.geometry.coordinates[0])}
           </strong>
-
           <div className="mb-6">
-            {/* <label className="text-base text-gray-600">Land Cover Type:</label> */}
             <div className="text-lg text-[#222] mt-1">
               {glc2000_classes[selectedFeature.properties.glc_cl_smj] || `Unknown (${selectedFeature.properties.glc_cl_smj})`}
             </div>
           </div>
-
-          {/* <span className="text-base mb-4 text-gray-400">
-            {getLocationName(selectedFeature.geometry.coordinates[1], selectedFeature.geometry.coordinates[0])}
-          </span> */}
-
           <div className="flex flex-col gap-6 mb-6 justify-center">
-
-            {/* <div className="flex flex-row gap-6">
-              <img
-                src={`/gcp-imgs/${selectedFeature.properties.filename?.split("_").slice(0, 2).join("_")}_predicted_mask.png`}
-                alt="Predicted"
-                className="w-[220px] h-[220px] object-contain border border-gray-200 rounded-lg bg-gray-100"
-                onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-              />
-              <img
-                src={`/gcp-imgs/${selectedFeature.properties.filename?.split("_").slice(0, 2).join("_")}_probabilities.png`}
-                alt="Probabilities"
-                className="w-[220px] h-[220px] object-contain border border-gray-200 rounded-lg bg-gray-100"
-                onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-              />
-            </div> */}
-
             <div className="flex flex-row gap-6 w-full max-w-full flex-nowrap">
               <div className="flex-1 aspect-square relative border border-gray-200 rounded-lg bg-gray-100">
                 <Image
@@ -266,20 +176,17 @@ export default function MapDemo() {
                 />
               </div>
             </div>
-
             <div className="flex flex-col items-center">
               {(() => {
                 const variance = selectedFeature.properties.Variance_pred_scaled;
                 const similarity = selectedFeature.properties.ncdd_embeddings;
                 let tags = [];
-                // Add ALL relevant tags if their conditions apply
                 if (variance <= 0.1 && similarity <= -5.25) tags.push({ label: 'Reliable prediction', color: '#43a047' });
                 if (variance > 0.1 && similarity > -5.25) tags.push({ label: 'Very unreliable', color: '#e53935' });
                 if (variance > 0.1) tags.push({ label: 'Too much variance', color: '#ff9800' });
                 if (variance > 0.45) tags.push({ label: 'Extremely unreliable model', color: '#e53935' });
                 if (similarity > -5.25) tags.push({ label: 'Not enough similar data', color: '#ff9800' });
                 if (similarity > -1.87) tags.push({ label: 'Extremely unreliable data', color: '#e53935' });
-                // Remove duplicate tags by label
                 const uniqueTags = Array.from(new Map(tags.map(tag => [tag.label, tag])).values());
                 return (
                   <div className="flex flex-wrap gap-2 mt-2 justify-center">
@@ -297,7 +204,6 @@ export default function MapDemo() {
               })()}
             </div>
           </div>
-
           <div className="mb-6">
             {(() => {
               const variance = selectedFeature.properties.Variance_pred_scaled;
@@ -340,7 +246,6 @@ export default function MapDemo() {
               );
             })()}
           </div>
-
           <div className="mb-6">
             {(() => {
               const similarity = selectedFeature.properties.ncdd_embeddings;
