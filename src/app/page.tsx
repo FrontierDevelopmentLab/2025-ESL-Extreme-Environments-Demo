@@ -36,7 +36,7 @@ export default function MapDemo() {
 
   // Load GeoJSON data dynamically
   useEffect(() => {
-    fetch("/data/filtered_demo.geojson")
+    fetch("/data/reduced.geojson")
       .then(res => res.json())
       .then(setGeojson);
   }, []);
@@ -91,11 +91,20 @@ export default function MapDemo() {
     20: "Water Bodies"
   };
 
+  function round(num: number, decimals: number) {
+    const factor = Math.pow(10, decimals);
+    return Math.round(num * factor) / factor;
+  }
+
+  function roundFixed(num: number, decimals: number) {
+    return (Math.round(num * Math.pow(10, decimals)) / Math.pow(10, decimals)).toFixed(decimals);
+  }
+
   return (
     <div className="h-screen w-full">
       <MapContainer ref={mapRef} center={[39.8283, -98.5795]} zoom={5} minZoom={2} style={{ height: "100%", width: "100%" }}>
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-        {/* Render every geojson point as a marker with custom icon */}
+        {/* Render every other geojson point as a marker with custom icon */}
         {(() => {
           const latLonArr: [number, number][] = [];
           const markers = Icon && geojson && geojson.features.filter((_: any, idx: number) => idx % 2 === 0).map((feature: any, idx: number) => {
@@ -119,7 +128,8 @@ export default function MapDemo() {
             const handleClick = () => {
               setSelectedFeature(feature);
               if (mapRef.current) {
-                mapRef.current.setView([lat, lon], 8);
+                // Offset longitude by +2 degrees to shift center right for datapane
+                mapRef.current.setView([lat, lon + 2], 7);
               }
             };
             return (
@@ -162,22 +172,40 @@ export default function MapDemo() {
           <div className="flex flex-col gap-6 mb-6 justify-center">
             <div className="flex flex-row gap-6 w-full max-w-full flex-nowrap">
               <div className="flex-1 aspect-square relative border border-gray-200 rounded-lg bg-gray-100">
-                <Image
-                  src={`/gcp-imgs/${selectedFeature.properties.filename?.split("_").slice(0, 2).join("_")}_predicted_mask.png`}
-                  alt="Predicted"
-                  fill
-                  className="object-contain rounded-lg w-full h-full"
-                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                />
+                {(() => {
+                  const [lon, lat] = selectedFeature.geometry.coordinates;
+                  const lonStr = roundFixed(lon, 4);
+                  const latStr = roundFixed(lat, 4);
+                  const predictedPath = `/gcp-imgs/${lonStr}_${latStr}_predicted_mask.png`;
+                  console.log('Predicted image path:', predictedPath);
+                  return (
+                    <Image
+                      src={predictedPath}
+                      alt="Predicted"
+                      fill
+                      className="object-contain rounded-lg w-full h-full"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                  );
+                })()}
               </div>
               <div className="flex-1 aspect-square relative border border-gray-200 rounded-lg bg-gray-100">
-                <Image
-                  src={`/gcp-imgs/${selectedFeature.properties.filename?.split("_").slice(0, 2).join("_")}_probabilities.png`}
-                  alt="Probabilities"
-                  fill
-                  className="object-contain rounded-lg w-full h-full"
-                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                />
+                {(() => {
+                  const [lon, lat] = selectedFeature.geometry.coordinates;
+                  const lonStr = roundFixed(lon, 4);
+                  const latStr = roundFixed(lat, 4);
+                  const probabilitiesPath = `/gcp-imgs/${lonStr}_${latStr}_probabilites.png`;
+                  console.log('Probabilities image path:', probabilitiesPath);
+                  return (
+                    <Image
+                      src={probabilitiesPath}
+                      alt="Probabilities"
+                      fill
+                      className="object-contain rounded-lg w-full h-full"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                  );
+                })()}
               </div>
             </div>
             <div className="flex flex-col items-center">
